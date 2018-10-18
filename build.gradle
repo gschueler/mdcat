@@ -1,0 +1,54 @@
+plugins{
+	//defines scmVersion from git tags
+    id 'pl.allegro.tech.build.axion-release' version '1.9.3'
+
+    id 'groovy'
+    id 'maven'
+
+    id 'com.gradle.build-scan' version '1.13'
+    id 'application'
+}
+apply plugin: 'idea'
+
+scmVersion {
+    tag {
+    	//defines release tags like "v1.2.3"
+        prefix = 'v'
+        versionSeparator = ''
+    }
+    ignoreUncommittedChanges = false
+}
+
+allprojects {
+    project.version = scmVersion.version
+    apply from: "${rootDir}/gradle/java.gradle"
+}
+
+dependencies {
+    // Use the latest Groovy version for building this library
+    // compile "com.squareup.okhttp3:okhttp:3.6.0"
+    compile 'com.atlassian.commonmark:commonmark:0.10.0'
+    compile 'com.atlassian.commonmark:commonmark-ext-gfm-tables:0.10.0'
+
+    // Use the awesome Spock testing and specification framework
+    testCompile 'org.spockframework:spock-core:1.0-groovy-2.4'
+}
+
+// In this section you declare where to find the dependencies of your project
+repositories {
+    // Use jcenter for resolving your dependencies.
+    // You can declare any Maven/Ivy/file repository here.
+    mavenLocal()
+    jcenter()
+}
+
+
+buildScan {
+    termsOfServiceUrl = 'https://gradle.com/terms-of-service'
+    termsOfServiceAgree = 'yes'
+}
+
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '4.10'
+}
