@@ -5,8 +5,8 @@ before_cache:
 - rm -f $HOME/.gradle/caches/modules-2/modules-2.lock
 cache:
   directories:
-  - $HOME/.gradle/caches/
-  - $HOME/.gradle/wrapper/
+  - "$HOME/.gradle/caches/"
+  - "$HOME/.gradle/wrapper/"
 deploy:
   provider: releases
   api_key:
@@ -16,6 +16,7 @@ deploy:
     - build/distributions/md*shadow*.zip
     - build/distributions/md*shadow*.tar
     # list file globs here for deployment
+    secure: LRt7EoBcRObbzlH/FqrQ/6lW3kUXe2GQHGXv4RGYRfC+zn8ZBNriehLALNKmVy0ZGGLMC2ssxkIm2sxTmeA+PcDpoIjld7jzUfgSgqo5rhTbmoOsu+QPgiGgTfvt3YHnp6945pY0l4IGDGuFdeM2zw5m6naoax7cDx6FcL8Kk+Al/+9GWFaEsl/QmvlogCO9QV9O6nxZ/uyVB68Kl4BmL0UJkZKyfIlsPQ3oCWzeualbAeUu2QeAP64xjLna7vWg9WNkCgMo7ldNG3T3g9rgB9+sbDgf/lJFxDAyFNQsx0YS9F9AwhrFUy8zUKkpQ6O3vkULILBUDCctCBdgAgq8znSzXbjEFmq8DDpTEVSDxxvdGAZIOw5YXQrBpw48B0VwcVlJid45M+PAgvym2hwreWklcfYz40OE+JAVYUpg/fCL7vDRfmC4zX1EZ8/H25HcNd+2UAgWrdkFR9BuV7I+DjBQvpVRpuQeaHhAH3F0NOutdXFVhGJ9y+u6RwItNPFTK9LIauEV9Vzx0PHmYAKT06mT1sQKdqWWyl2bi7mMM0Pzd9I9TAOtvMk5pzy8kgi24KCeWQpOCIVrgViS+pZFEiQUEDeOpPlC540EgcY+qcejC4OTb9x+gAycZsICm/ZgOsKxT98JsgxmJjiTjrtCOAkXHX0aetxJmCOzZfc2wzs=
   on:
     repo: gschueler/mdcat
     tags: true
