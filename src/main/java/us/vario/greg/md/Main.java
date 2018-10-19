@@ -1,6 +1,7 @@
 package us.vario.greg.md;
 
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import org.commonmark.node.*;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.NodeRenderer;
@@ -8,12 +9,10 @@ import org.commonmark.renderer.html.*;
 import picocli.CommandLine;
 
 import java.io.*;
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,8 +26,12 @@ public class Main
     @CommandLine.Parameters(index = "0", description = "The file to read.", paramLabel = "FILE")
     private File file;
 
-    @CommandLine.Option(names = {"-H", "--HTML"}, description = "render as html")
+    @CommandLine.Option(names = {"-H", "--html"}, description = "render as html")
     private boolean html;
+
+    @CommandLine.Option(names = {"-p", "--plain"},
+                        description = "render colorized text without markdown syntax (default)")
+    private boolean plain;
 
     @CommandLine.Option(names = {"-m", "--markdown", "--md"},
                         description = "render colorized text *with* markdown syntax (inverts --plain), can be set "
@@ -43,6 +46,7 @@ public class Main
     public static void main(String[] args) {
         CommandLine.call(new Main(), args);
     }
+
 
     @Override
     public Void call() throws Exception {
@@ -76,11 +80,21 @@ public class Main
 
             }
             HtmlRenderer renderer = HtmlRenderer.builder().
-                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors)).build();
+                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors, isPlain())).build();
             renderer.render(document, System.out);
 
         }
         return null;
+    }
+
+    private boolean isPlain() {
+        if (markdown) {
+            return false;
+        }
+        if (plain) {
+            return true;
+        }
+        return System.getenv("MD_MD") == null;
     }
 
     private Map<? extends String, ? extends String> loadProfile(final String profile) {
@@ -126,18 +140,17 @@ public class Main
         DEFAULT_COLORS = Collections.unmodifiableMap(map);
     }
 
+    @RequiredArgsConstructor
     private class MyCoreNodeRendererFactory
             implements HtmlNodeRendererFactory
     {
         final Map<String, String> colors;
+        final boolean plain;
 
-        public MyCoreNodeRendererFactory(final Map<String, String> colors) {
-            this.colors = colors;
-        }
 
         @Override
         public NodeRenderer create(final HtmlNodeRendererContext context) {
-            return new MyCoreNodeRenderer(context, colors);
+            return new MyCoreNodeRenderer(context, colors, plain);
         }
     }
 
@@ -145,10 +158,17 @@ public class Main
             extends CoreHtmlNodeRenderer
     {
         final Map<String, String> colors;
+        final boolean plain;
 
-        public MyCoreNodeRenderer(final HtmlNodeRendererContext context, final Map<String, String> colors) {
+        public MyCoreNodeRenderer(
+                final HtmlNodeRendererContext context,
+                final Map<String, String> colors,
+                boolean plain
+        )
+        {
             super(context);
             this.colors = colors;
+            this.plain = plain;
         }
 
         ArrayDeque<Ctx> ctxtStack = new ArrayDeque<Ctx>();
@@ -173,7 +193,11 @@ public class Main
         public void visit(final BulletList bulletList) {
             Ctx ctx = new Ctx(bulletList);
             ctx.textColor = getColor("bullet");
-            ctx.setPrefix(bulletList.getBulletMarker() + " ");
+            if (plain) {
+                ctx.setPrefix("• ");
+            } else {
+                ctx.setPrefix(bulletList.getBulletMarker() + " ");
+            }
             ctxtStack.push(ctx);
             renderListBlock(bulletList);
             ctxtStack.pop();
@@ -207,14 +231,17 @@ public class Main
         public void visit(final Heading heading) {
 
             line();
-            StringBuilder h = new StringBuilder();
-            for (int i = 0; i < heading.getLevel(); i++) {
-                h.append("#");
-            }
             Ctx ctx = new Ctx(heading);
 
             ctx.textColor = getColor("header");
-            ctx.prefix = h.toString() + " ";
+
+            if (!plain) {
+                StringBuilder h = new StringBuilder();
+                for (int i = 0; i < heading.getLevel(); i++) {
+                    h.append("#");
+                }
+                ctx.setPrefix(h.toString() + " ");
+            }
             ctxtStack.push(ctx);
 
             visitChildren(heading);
@@ -238,9 +265,13 @@ public class Main
         @Override
         public void visit(final Code code) {
             html().text(Ansi.beginColor(getColor("code")));
-            html().text("`");
+            if (!plain) {
+                html().text("`");
+            }
             html().text(code.getLiteral());
-            html().text("`");
+            if (!plain) {
+                html().text("`");
+            }
             html().text(Ansi.reset);
         }
 
@@ -249,9 +280,13 @@ public class Main
             Ctx ctx = new Ctx(emphasis);
             ctx.textColor = getColor("emphasis");
             ctxtStack.push(ctx);
-            emitColorized(getColor("emphasis"), emphasis.getOpeningDelimiter());
+            if (!plain) {
+                emitColorized(getColor("emphasis"), emphasis.getOpeningDelimiter());
+            }
             visitChildren(emphasis);
-            emitColorized(getColor("emphasis"), emphasis.getClosingDelimiter());
+            if (!plain) {
+                emitColorized(getColor("emphasis"), emphasis.getClosingDelimiter());
+            }
             ctxtStack.pop();
         }
 
@@ -272,30 +307,39 @@ public class Main
             Ctx ctx = new Ctx(strongEmphasis);
             ctx.textColor = getColor("strong");
             ctxtStack.push(ctx);
-            emitColorized(getColor("strong"), strongEmphasis.getOpeningDelimiter());
+            if (!plain) {
+                emitColorized(getColor("strong"), strongEmphasis.getOpeningDelimiter());
+            }
             visitChildren(strongEmphasis);
-            emitColorized(getColor("strong"), strongEmphasis.getClosingDelimiter());
+            if (!plain) {
+                emitColorized(getColor("strong"), strongEmphasis.getClosingDelimiter());
+            }
             ctxtStack.pop();
         }
 
         @Override
         public void visit(final Link link) {
             String url = context.encodeUrl(link.getDestination());
-            html().text("[");
+            if (!plain) {
+                html().text("[");
+            }
 
             Ctx ctx = new Ctx(link);
+            ctx.setTextColor(getColor("linkText", "text"));
             ctxtStack.push(ctx);
             visitChildren(link);
-            html().text("](");
-            html().text(Ansi.colorize(url, getColor("linkHref", "href")));
-            if (link.getTitle() != null) {
-                html().text(Ansi.beginColor(getColor("linkTitle", "title")));
-                html().raw(" \"");
-                html().text(link.getTitle());
-                html().raw("\"");
-                html().raw(Ansi.reset);
+            if (!plain) {
+                html().text("](");
+                html().text(Ansi.colorize(url, getColor("linkHref", "href")));
+                if (link.getTitle() != null) {
+                    html().text(Ansi.beginColor(getColor("linkTitle", "title")));
+                    html().raw(" \"");
+                    html().text(link.getTitle());
+                    html().raw("\"");
+                    html().raw(Ansi.reset);
+                }
+                html().text(")");
             }
-            html().text(")");
 
             ctxtStack.pop();
         }
@@ -303,21 +347,26 @@ public class Main
         @Override
         public void visit(final Image image) {
             String url = context.encodeUrl(image.getDestination());
-            html().text("![");
-
-            Ctx ctx = new Ctx(image);
-            ctxtStack.push(ctx);
-            visitChildren(image);
-            html().text("](");
-            html().text(Ansi.colorize(url, getColor("imageHref", "href")));
-            if (image.getTitle() != null) {
-                html().text(Ansi.beginColor(getColor("imageTitle", "title")));
-                html().raw(" \"");
-                html().text(image.getTitle());
-                html().raw("\"");
-                html().raw(Ansi.reset);
+            if (!plain) {
+                html().text("![");
             }
-            html().text(")");
+            Ctx ctx = new Ctx(image);
+            ctx.setTextColor(getColor("imageText", "text"));
+            ctxtStack.push(ctx);
+
+            visitChildren(image);
+            if (!plain) {
+                html().text("](");
+                html().text(Ansi.colorize(url, getColor("imageHref", "href")));
+                if (image.getTitle() != null) {
+                    html().text(Ansi.beginColor(getColor("imageTitle", "title")));
+                    html().raw(" \"");
+                    html().text(image.getTitle());
+                    html().raw("\"");
+                    html().raw(Ansi.reset);
+                }
+                html().text(")");
+            }
 
             ctxtStack.pop();
         }
@@ -337,7 +386,9 @@ public class Main
             Ctx ctx = new Ctx(blockQuote);
             ctxtStack.push(ctx);
             ctx.setTextColor(getColor("blockquote"));
-            ctx.setPrefix("> ");
+            if (!plain) {
+                ctx.setPrefix("> ");
+            }
             visitChildren(blockQuote);
 
             ctxtStack.pop();
@@ -345,7 +396,11 @@ public class Main
 
         @Override
         public void visit(final IndentedCodeBlock indentedCodeBlock) {
-            emitColorized(getColor("code"), indent("    ", indentedCodeBlock));
+            if (!plain) {
+                emitColorized(getColor("code"), indent("    ", indentedCodeBlock));
+            } else {
+                emitColorized(getColor("code"), indentedCodeBlock.getLiteral());
+            }
         }
 
         private String indent(String indent, final IndentedCodeBlock indentedCodeBlock) {
@@ -368,11 +423,15 @@ public class Main
             for (int i = 0; i < fencedCodeBlock.getFenceLength(); i++) {
                 fence.append(fencedCodeBlock.getFenceChar());
             }
-            html().text(fence.toString());
-            line();
+            if (!plain) {
+                html().text(fence.toString());
+                line();
+            }
             html().text(fencedCodeBlock.getLiteral());
             line();
-            html().text(fence.toString());
+            if (!plain) {
+                html().text(fence.toString());
+            }
             html().text(Ansi.reset);
         }
         boolean lastLine=false;
@@ -401,7 +460,9 @@ public class Main
                     ? ctxtStack.peek().textColor
                     : getColor("text");
 
-            html().text(Ansi.beginColor(textcolor));
+            if (textcolor != null) {
+                html().text(Ansi.beginColor(textcolor));
+            }
 
             if (ctxtStack.size() > 0) {
                 ctxtStack.peek().withType(Node.class, (ctx, node) -> {
