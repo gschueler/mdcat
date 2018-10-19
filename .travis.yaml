@@ -1,6 +1,6 @@
 language: java
 jdk:
-- oraclejdk8
+- openjdk8
 before_cache:
 - rm -f $HOME/.gradle/caches/modules-2/modules-2.lock
 cache:
@@ -12,11 +12,12 @@ deploy:
   api_key:
     secure: "TODO: run `travis setup releases` to setup deployment"
   file:
-    - build/libs/myproject*.jar
+    - build/libs/md*all*.jar
+    - build/distributions/md*shadow*.zip
+    - build/distributions/md*shadow*.tar
     # list file globs here for deployment
-    
   on:
-    repo: myorg/myproject
+    repo: gschueler/mdcat
     tags: true
   file_glob: true
   skip_cleanup: true
