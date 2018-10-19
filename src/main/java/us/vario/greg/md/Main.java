@@ -119,7 +119,7 @@ public class Main
         public void visit(final OrderedList orderedList) {
             Ctx ctx = new Ctx(orderedList, orderedList.getStartNumber());
             ctx.textColor = getColor("bullet");
-            ctx.setPrefix(ctx.nextListItemIndex() + ". ");
+            ctx.setPrefixer(() -> ctx.nextListItemIndex() + ". ");
             ctxtStack.push(ctx);
             renderListBlock(orderedList);
             ctxtStack.pop();
@@ -361,9 +361,10 @@ public class Main
 
             if (ctxtStack.size() > 0) {
                 ctxtStack.peek().withType(Node.class, (ctx, node) -> {
-                    if (null != ctx.prefix) {
+                    String prefix = ctx.getPrefix();
+                    if (null != prefix) {
                         if(lastLine) {
-                            html().raw(ctx.prefix);
+                            html().raw(prefix);
                         }
                     }
                 });
@@ -385,6 +386,7 @@ public class Main
         private class Ctx {
             final Node node;
             String prefix;
+            Supplier<String> prefixer;
             String textColor;
 
             public Ctx(final Node node) {
@@ -403,6 +405,16 @@ public class Main
                     olIndex = 1;
                 }
                 return olIndex++;
+            }
+
+            String getPrefix() {
+                if (null != prefix) {
+                    return prefix;
+                }
+                if (null != prefixer) {
+                    return prefixer.get();
+                }
+                return null;
             }
 
             public <T extends Node> void withType(Class<T> type, BiConsumer<Ctx, T> callable) {
