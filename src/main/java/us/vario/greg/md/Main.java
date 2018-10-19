@@ -432,7 +432,6 @@ public class Main
         static final int BG = 48;
         static String reset = esc + "[0m";
         static String modeBold = "bold-";
-        static String modeBg = "bg-";
 
         static int rgb(int r, int g, int b) {
             return 16 + b + 6 * g + 36 * r;
@@ -450,7 +449,7 @@ public class Main
             return escStart + val + "m";
         }
 
-        static String esc(int... val) {
+        static String esc(Integer... val) {
             StringBuilder sb = new StringBuilder();
             for (int i : val) {
                 if (sb.length() > 0) {
@@ -461,50 +460,77 @@ public class Main
             return escStart + sb.toString() + "m";
         }
 
-        static Map<String, String> cols = new HashMap<>();
+        @Data
+        static class Color {
+            Integer[] mods;
+
+
+            public Color(final Integer... mods) {
+                this.mods = mods;
+            }
+
+            public Color mods(final Integer more) {
+                Integer[] more1 = new Integer[1];
+                more1[0] = more;
+                return mods(more1);
+            }
+
+            public Color mods(final Integer[] more) {
+                List<Integer> integers = new ArrayList<>(Arrays.asList(more));
+                Integer[] modsar = mods;
+                integers.addAll(Arrays.asList(mods));
+                return new Color(integers.toArray(new Integer[0]));
+            }
+
+            public String toString() {
+                return esc(mods);
+            }
+        }
+
+        static Map<String, Color> cols = new HashMap<>();
 
         static {
-            cols.put("black", basic(30));
-            cols.put("bg-black", basic(40));
-            cols.put("brightblack", basic(90));
-            cols.put("bg-brightblack", basic(100));
-            cols.put("red", basic(31));
-            cols.put("bg-red", basic(41));
-            cols.put("brightred", basic(91));
-            cols.put("bg-brightred", basic(101));
-            cols.put("orange", fgrgb(5, 2, 0));
-            cols.put("bg-orange", bgrgb(5, 2, 0));
-            cols.put("indigo", fgrgb(2, 0, 2));
-            cols.put("bg-indigo", bgrgb(2, 0, 2));
-            cols.put("violet", fgrgb(4, 0, 5));
-            cols.put("bg-violet", bgrgb(4, 0, 5));
-            cols.put("green", basic(32));
-            cols.put("bg-green", basic(42));
-            cols.put("brightgreen", basic(92));
-            cols.put("bg-brightgreen", basic(102));
-            cols.put("yellow", basic(33));
-            cols.put("bg-yellow", basic(43));
-            cols.put("brightyellow", basic(93));
-            cols.put("bg-brightyellow", basic(103));
-            cols.put("blue", basic(34));
-            cols.put("bg-blue", basic(44));
-            cols.put("brightblue", basic(94));
-            cols.put("bg-brightblue", basic(104));
-            cols.put("magenta", basic(35));
-            cols.put("bg-magenta", basic(45));
-            cols.put("brightmagenta", basic(95));
-            cols.put("bg-brightmagenta", basic(105));
-            cols.put("cyan", basic(36));
-            cols.put("bg-cyan", basic(46));
-            cols.put("brightcyan", basic(96));
-            cols.put("bg-brightcyan", basic(106));
-            cols.put("white", basic(37));
-            cols.put("bg-white", basic(47));
-            cols.put("brightwhite", basic(97));
-            cols.put("bg-brightwhite", basic(107));
+            cols.put("black", new Color(30));
+            cols.put("bg-black", new Color(40));
+            cols.put("brightblack", new Color(90));
+            cols.put("bg-brightblack", new Color(100));
+            cols.put("red", new Color(31));
+            cols.put("bg-red", new Color(41));
+            cols.put("brightred", new Color(91));
+            cols.put("bg-brightred", new Color(101));
+            cols.put("orange", new Color(FG, 5, rgb(5, 2, 0)));
+            cols.put("bg-orange", new Color(BG, 5, rgb(5, 2, 0)));
+            cols.put("indigo", new Color(FG, 5, rgb(2, 0, 2)));
+            cols.put("bg-indigo", new Color(BG, 5, rgb(2, 0, 2)));
+            cols.put("violet", new Color(FG, 5, rgb(4, 0, 5)));
+            cols.put("bg-violet", new Color(BG, 5, rgb(4, 0, 5)));
+            cols.put("green", new Color(32));
+            cols.put("bg-green", new Color(42));
+            cols.put("brightgreen", new Color(92));
+            cols.put("bg-brightgreen", new Color(102));
+            cols.put("yellow", new Color(33));
+            cols.put("bg-yellow", new Color(43));
+            cols.put("brightyellow", new Color(93));
+            cols.put("bg-brightyellow", new Color(103));
+            cols.put("blue", new Color(34));
+            cols.put("bg-blue", new Color(44));
+            cols.put("brightblue", new Color(94));
+            cols.put("bg-brightblue", new Color(104));
+            cols.put("magenta", new Color(35));
+            cols.put("bg-magenta", new Color(45));
+            cols.put("brightmagenta", new Color(95));
+            cols.put("bg-brightmagenta", new Color(105));
+            cols.put("cyan", new Color(36));
+            cols.put("bg-cyan", new Color(46));
+            cols.put("brightcyan", new Color(96));
+            cols.put("bg-brightcyan", new Color(106));
+            cols.put("white", new Color(37));
+            cols.put("bg-white", new Color(47));
+            cols.put("brightwhite", new Color(97));
+            cols.put("bg-brightwhite", new Color(107));
 
-            cols.put("gray", fgrgb(1, 1, 1));
-            cols.put("bg-gray", bgrgb(1, 1, 1));
+            cols.put("gray", new Color(FG, 5, rgb(1, 1, 1)));
+            cols.put("bg-gray", new Color(BG, 5, rgb(1, 1, 1)));
         }
 
 
@@ -520,27 +546,40 @@ public class Main
             return sb.toString();
         }
 
+        static Pattern colbase = Pattern.compile("(?<bold>bold-)?(?<color>[a-z]+)");
+        static Pattern
+                col16 =
+                Pattern.compile("(?<bold>bold-)?(?<bg>bg-)?(?<r>\\d{1,2}),(?<g>\\d{1,2}),(?<b>\\d{1,2})");
         private static String getColor(final String color) {
-            String val = cols.get(color);
+            Color val = cols.get(color);
             if (val != null) {
-                return val;
+                return val.toString();
+            }
+            Matcher matcher1 = colbase.matcher(color);
+            if (matcher1.matches()) {
+                String colgroup = matcher1.group("color");
+                boolean bold = matcher1.group("bold") != null;
+                Color color1 = cols.get(colgroup);
+                if (color1 != null) {
+                    return color1.mods(1).toString();
+                }
             }
             //256 color
-            Pattern compile = Pattern.compile("(?<bg>bg-)?(?<r>\\d{1,2}),(?<g>\\d{1,2}),(?<b>\\d{1,2})");
-            Matcher matcher = compile.matcher(color);
+            Matcher matcher = col16.matcher(color);
             if (matcher.matches()) {
                 if (matcher.group("bg") != null) {
-                    return bgrgb(
+                    return new Color(BG, 5, rgb(
                             Integer.parseInt(matcher.group("r")),
                             Integer.parseInt(matcher.group("g")),
                             Integer.parseInt(matcher.group("b"))
-                    );
+                    )).toString();
                 }
-                return fgrgb(
+
+                return new Color(FG, 5, rgb(
                         Integer.parseInt(matcher.group("r")),
                         Integer.parseInt(matcher.group("g")),
                         Integer.parseInt(matcher.group("b"))
-                );
+                )).toString();
 
             }
             return null;
