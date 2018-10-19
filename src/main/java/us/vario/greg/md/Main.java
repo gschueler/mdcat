@@ -109,7 +109,7 @@ public class Main
         @Override
         public void visit(final Document document) {
             super.visit(document);
-            html().line();
+            line();
         }
 
         @Override
@@ -133,7 +133,7 @@ public class Main
         }
 
         private void renderListBlock(ListBlock listBlock) {
-            html().line();
+            line();
             visitChildren(listBlock);
             html().text("\n");
         }
@@ -141,7 +141,7 @@ public class Main
         @Override
         public void visit(final ListItem listItem) {
             visitChildren(listItem);
-            html().line();
+            line();
         }
 
         private boolean isInTightList(Paragraph paragraph) {
@@ -159,7 +159,7 @@ public class Main
         @Override
         public void visit(final Heading heading) {
 
-            html().line();
+            line();
             StringBuilder h = new StringBuilder();
             for (int i = 0; i < heading.getLevel(); i++) {
                 h.append("#");
@@ -180,7 +180,7 @@ public class Main
         public void visit(final Paragraph paragraph) {
             boolean inTightList = isInTightList(paragraph);
             if (!inTightList) {
-                html().line();
+                line();
             }
             visitChildren(paragraph);
             if (!inTightList) {
@@ -235,6 +235,9 @@ public class Main
         public void visit(final Link link) {
             String url = context.encodeUrl(link.getDestination());
             html().text("[");
+
+            Ctx ctx = new Ctx(link);
+            ctxtStack.push(ctx);
             visitChildren(link);
             html().text("](");
             html().text(Ansi.colorize(url, colors.get("href")));
@@ -246,6 +249,8 @@ public class Main
                 html().raw(Ansi.reset);
             }
             html().text(")");
+
+            ctxtStack.pop();
         }
 
         @Override
@@ -285,11 +290,28 @@ public class Main
                 fence.append(fencedCodeBlock.getFenceChar());
             }
             html().text(fence.toString());
-            html().line();
+            line();
             html().text(fencedCodeBlock.getLiteral());
-            html().line();
+            line();
             html().text(fence.toString());
             html().text(Ansi.reset);
+        }
+        boolean lastLine=false;
+        private void line() {
+            html().line();
+            lastLine=true;
+        }
+
+        @Override
+        public void visit(final SoftLineBreak softLineBreak) {
+            super.visit(softLineBreak);
+            lastLine=true;
+        }
+
+        @Override
+        public void visit(final HardLineBreak hardLineBreak) {
+            html().raw(context.getSoftbreak());
+            lastLine=true;
         }
 
         @Override
@@ -305,12 +327,15 @@ public class Main
             if (ctxtStack.size() > 0) {
                 ctxtStack.peek().withType(Node.class, (ctx, node) -> {
                     if (null != ctx.prefix) {
-                        html().raw(ctx.prefix);
+                        if(lastLine) {
+                            html().raw(ctx.prefix);
+                        }
                     }
                 });
             }
 
             super.visit(text);
+            lastLine = text.getLiteral().charAt(text.getLiteral().length() - 1) == '\n';
 
             if (textcolor != null) {
                 html().text(Ansi.reset);
