@@ -66,7 +66,7 @@ public class Main
     static {
         HashMap<String, String> map = new HashMap<>();
 
-        map.put("code", "green");
+        map.put("code", "red");
         map.put("emphasis", "brightyellow");
         map.put("strong", "orange");
         map.put("header", "brightblue");
