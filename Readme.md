@@ -7,7 +7,7 @@ Cat markdown files with ansi colorization for improved readability on the comman
 
 ## Build
 
-	./gradlew dist
+	./gradlew distZip
 
 ## TODO
 
