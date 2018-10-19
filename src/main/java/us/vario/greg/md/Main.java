@@ -23,11 +23,22 @@ public class Main
         implements Callable<Void>
 {
 
+    public static final String DEFAULT_PROFILE = "light";
     @CommandLine.Parameters(index = "0", description = "The file to read.", paramLabel = "FILE")
     private File file;
 
     @CommandLine.Option(names = {"-H", "--HTML"}, description = "render as html")
     private boolean html;
+
+    @CommandLine.Option(names = {"-m", "--markdown", "--md"},
+                        description = "render colorized text *with* markdown syntax (inverts --plain), can be set "
+                                      + "with env var MD_MD")
+    private boolean markdown;
+
+    @CommandLine.Option(names = {"-P", "--profile"},
+                        description = "Use a prefdefined color profile: [light,dark], can be set with env var "
+                                      + "MD_PROFILE")
+    private String profile;
 
     public static void main(String[] args) {
         CommandLine.call(new Main(), args);
@@ -46,6 +57,15 @@ public class Main
                 return null;
             }
             Map<String, String> colors = new HashMap<>(DEFAULT_COLORS);
+            if (null == profile && System.getenv("MD_PROFILE") != null) {
+                profile = System.getenv("MD_PROFILE").toLowerCase();
+            }
+            if (null == profile) {
+                profile = DEFAULT_PROFILE;
+            }
+            if (null != profile) {
+                colors.putAll(loadProfile(profile));
+            }
             //eval env colors
             for (String envKey : System.getenv().keySet()) {
 
@@ -63,21 +83,45 @@ public class Main
         return null;
     }
 
+    private Map<? extends String, ? extends String> loadProfile(final String profile) {
+        HashMap<String, String> map = new HashMap<>();
+        Properties props = new Properties();
+
+        try (
+                InputStream resourceAsStream = Main.class
+                        .getClassLoader()
+                        .getResourceAsStream("md-profile-" + profile.toLowerCase() + ".properties")
+        ) {
+            if (null != resourceAsStream) {
+                props.load(resourceAsStream);
+                for (Object o : props.keySet()) {
+                    map.put(o.toString(), props.getProperty(o.toString()));
+                }
+            } else {
+                throw new RuntimeException("no profile found: md-profile-" + profile.toLowerCase() + ".properties");
+            }
+        } catch (IOException ignored) {
+
+        }
+
+        return map;
+    }
+
     static Map<String, String> DEFAULT_COLORS;
 
     static {
         HashMap<String, String> map = new HashMap<>();
 
         map.put("code", "red");
-        map.put("emphasis", "brightyellow");
         map.put("strong", "orange");
+        map.put("emphasis", "green");
         map.put("header", "brightblue");
-        map.put("bullet", "5,4,3");
         map.put("href", "orange");
         map.put("imagehref", "blue");
         map.put("title", "green");
         map.put("blockquote", "gray");
-        map.put("text", "white");
+        map.put("imagetext", "brightblue");
+        map.put("linktext", "brightblue");
 
         DEFAULT_COLORS = Collections.unmodifiableMap(map);
     }
