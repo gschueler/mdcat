@@ -47,11 +47,13 @@ public class Main
             }
             Map<String, String> colors = new HashMap<>(DEFAULT_COLORS);
             //eval env colors
-            for (String s : colors.keySet()) {
-                String envName = ("COL_" + s).toUpperCase();
-                if (System.getenv(envName) != null) {
-                    colors.put(s, System.getenv(envName));
+            for (String envKey : System.getenv().keySet()) {
+
+                if (envKey.startsWith("COL_")) {
+                    String colName = envKey.substring("COL_".length()).toLowerCase();
+                    colors.put(colName, System.getenv(envKey));
                 }
+
             }
             HtmlRenderer renderer = HtmlRenderer.builder().
                     nodeRendererFactory(new MyCoreNodeRendererFactory(colors)).build();
@@ -72,7 +74,8 @@ public class Main
         map.put("header", "brightblue");
         map.put("bullet", "5,4,3");
         map.put("href", "orange");
-        map.put("linkTitle", "green");
+        map.put("imagehref", "blue");
+        map.put("title", "green");
         map.put("blockquote", "gray");
         map.put("text", "white");
 
@@ -115,7 +118,7 @@ public class Main
         @Override
         public void visit(final OrderedList orderedList) {
             Ctx ctx = new Ctx(orderedList, orderedList.getStartNumber());
-            ctx.textColor = colors.get("bullet");
+            ctx.textColor = getColor("bullet");
             ctx.setPrefix(ctx.nextListItemIndex() + ". ");
             ctxtStack.push(ctx);
             renderListBlock(orderedList);
@@ -125,7 +128,7 @@ public class Main
         @Override
         public void visit(final BulletList bulletList) {
             Ctx ctx = new Ctx(bulletList);
-            ctx.textColor = colors.get("bullet");
+            ctx.textColor = getColor("bullet");
             ctx.setPrefix(bulletList.getBulletMarker() + " ");
             ctxtStack.push(ctx);
             renderListBlock(bulletList);
@@ -166,7 +169,7 @@ public class Main
             }
             Ctx ctx = new Ctx(heading);
 
-            ctx.textColor = colors.get("header");
+            ctx.textColor = getColor("header");
             ctx.prefix = h.toString() + " ";
             ctxtStack.push(ctx);
 
@@ -190,7 +193,7 @@ public class Main
 
         @Override
         public void visit(final Code code) {
-            html().text(Ansi.beginColor(colors.get("code")));
+            html().text(Ansi.beginColor(getColor("code")));
             html().text("`");
             html().text(code.getLiteral());
             html().text("`");
@@ -200,11 +203,11 @@ public class Main
         @Override
         public void visit(final Emphasis emphasis) {
             Ctx ctx = new Ctx(emphasis);
-            ctx.textColor = colors.get("emphasis");
+            ctx.textColor = getColor("emphasis");
             ctxtStack.push(ctx);
-            emitColorized(colors.get("emphasis"), emphasis.getOpeningDelimiter());
+            emitColorized(getColor("emphasis"), emphasis.getOpeningDelimiter());
             visitChildren(emphasis);
-            emitColorized(colors.get("emphasis"), emphasis.getClosingDelimiter());
+            emitColorized(getColor("emphasis"), emphasis.getClosingDelimiter());
             ctxtStack.pop();
         }
 
@@ -223,11 +226,11 @@ public class Main
         @Override
         public void visit(final StrongEmphasis strongEmphasis) {
             Ctx ctx = new Ctx(strongEmphasis);
-            ctx.textColor = colors.get("strong");
+            ctx.textColor = getColor("strong");
             ctxtStack.push(ctx);
-            emitColorized(colors.get("strong"), strongEmphasis.getOpeningDelimiter());
+            emitColorized(getColor("strong"), strongEmphasis.getOpeningDelimiter());
             visitChildren(strongEmphasis);
-            emitColorized(colors.get("strong"), strongEmphasis.getClosingDelimiter());
+            emitColorized(getColor("strong"), strongEmphasis.getClosingDelimiter());
             ctxtStack.pop();
         }
 
@@ -240,9 +243,9 @@ public class Main
             ctxtStack.push(ctx);
             visitChildren(link);
             html().text("](");
-            html().text(Ansi.colorize(url, colors.get("href")));
+            html().text(Ansi.colorize(url, getColor("linkHref", "href")));
             if (link.getTitle() != null) {
-                html().text(Ansi.beginColor(colors.get("linkTitle")));
+                html().text(Ansi.beginColor(getColor("linkTitle", "title")));
                 html().raw(" \"");
                 html().text(link.getTitle());
                 html().raw("\"");
@@ -254,10 +257,42 @@ public class Main
         }
 
         @Override
+        public void visit(final Image image) {
+            String url = context.encodeUrl(image.getDestination());
+            html().text("![");
+
+            Ctx ctx = new Ctx(image);
+            ctxtStack.push(ctx);
+            visitChildren(image);
+            html().text("](");
+            html().text(Ansi.colorize(url, getColor("imageHref", "href")));
+            if (image.getTitle() != null) {
+                html().text(Ansi.beginColor(getColor("imageTitle", "title")));
+                html().raw(" \"");
+                html().text(image.getTitle());
+                html().raw("\"");
+                html().raw(Ansi.reset);
+            }
+            html().text(")");
+
+            ctxtStack.pop();
+        }
+
+
+        private String getColor(final String... colorsarr) {
+            for (String color : colorsarr) {
+                if (null != colors.get(color.toLowerCase())) {
+                    return colors.get(color.toLowerCase());
+                }
+            }
+            return null;
+        }
+
+        @Override
         public void visit(final BlockQuote blockQuote) {
             Ctx ctx = new Ctx(blockQuote);
             ctxtStack.push(ctx);
-            ctx.setTextColor(colors.get("blockquote"));
+            ctx.setTextColor(getColor("blockquote"));
             ctx.setPrefix("> ");
             visitChildren(blockQuote);
 
@@ -266,7 +301,7 @@ public class Main
 
         @Override
         public void visit(final IndentedCodeBlock indentedCodeBlock) {
-            emitColorized(colors.get("code"), indent("    ", indentedCodeBlock));
+            emitColorized(getColor("code"), indent("    ", indentedCodeBlock));
         }
 
         private String indent(String indent, final IndentedCodeBlock indentedCodeBlock) {
@@ -284,7 +319,7 @@ public class Main
 
         @Override
         public void visit(final FencedCodeBlock fencedCodeBlock) {
-            html().text(Ansi.beginColor(colors.get("code")));
+            html().text(Ansi.beginColor(getColor("code")));
             StringBuilder fence = new StringBuilder();
             for (int i = 0; i < fencedCodeBlock.getFenceLength(); i++) {
                 fence.append(fencedCodeBlock.getFenceChar());
@@ -320,7 +355,7 @@ public class Main
                     textcolor =
                     ctxtStack.size() > 0 && ctxtStack.peek().textColor != null
                     ? ctxtStack.peek().textColor
-                    : colors.get("text");
+                    : getColor("text");
 
             html().text(Ansi.beginColor(textcolor));
 
