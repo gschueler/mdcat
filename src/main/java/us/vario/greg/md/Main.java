@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @CommandLine.Command(description = "Ansi colorized text rendering of Markdown files",
                      name = "md", mixinStandardHelpOptions = true, version = "0.1")
@@ -43,8 +45,16 @@ public class Main
                 renderer.render(document, System.out);
                 return null;
             }
+            Map<String, String> colors = new HashMap<>(DEFAULT_COLORS);
+            //eval env colors
+            for (String s : colors.keySet()) {
+                String envName = ("COL_" + s).toUpperCase();
+                if (System.getenv(envName) != null) {
+                    colors.put(s, System.getenv(envName));
+                }
+            }
             HtmlRenderer renderer = HtmlRenderer.builder().
-                    nodeRendererFactory(new MyCoreNodeRendererFactory(DEFAULT_COLORS)).build();
+                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors)).build();
             renderer.render(document, System.out);
 
         }
@@ -55,13 +65,17 @@ public class Main
 
     static {
         HashMap<String, String> map = new HashMap<>();
+
         map.put("code", "green");
-        map.put("emphasis", "blue");
+        map.put("emphasis", "brightyellow");
         map.put("strong", "orange");
-        map.put("header", "red");
-        map.put("bullet", "white");
+        map.put("header", "brightblue");
+        map.put("bullet", "5,4,3");
         map.put("href", "orange");
         map.put("linkTitle", "green");
+        map.put("blockquote", "gray");
+        map.put("text", "white");
+
         DEFAULT_COLORS = Collections.unmodifiableMap(map);
     }
 
@@ -93,52 +107,39 @@ public class Main
         ArrayDeque<Ctx> ctxtStack = new ArrayDeque<Ctx>();
 
         @Override
+        public void visit(final Document document) {
+            super.visit(document);
+            html().line();
+        }
+
+        @Override
         public void visit(final OrderedList orderedList) {
-            ctxtStack.push(new Ctx(orderedList, orderedList.getStartNumber()));
+            Ctx ctx = new Ctx(orderedList, orderedList.getStartNumber());
+            ctx.textColor = colors.get("bullet");
+            ctx.setPrefix(ctx.nextListItemIndex() + ". ");
+            ctxtStack.push(ctx);
             renderListBlock(orderedList);
             ctxtStack.pop();
         }
 
         @Override
         public void visit(final BulletList bulletList) {
-            ctxtStack.push(new Ctx(bulletList));
+            Ctx ctx = new Ctx(bulletList);
+            ctx.textColor = colors.get("bullet");
+            ctx.setPrefix(bulletList.getBulletMarker() + " ");
+            ctxtStack.push(ctx);
             renderListBlock(bulletList);
             ctxtStack.pop();
         }
 
         private void renderListBlock(ListBlock listBlock) {
             html().line();
-            if (ctxtStack.size() > 0) {
-                ctxtStack.peek().withType(OrderedList.class, (ctx, node) -> {
-                    ctx.setPrefix(Ansi.colorize(ctx.nextListItemIndex() + ". ", colors.get("bullet")));
-                });
-
-                ctxtStack.peek().withType(BulletList.class, (ctx, node) -> {
-                    ctx.setPrefix(Ansi.colorize(node.getBulletMarker() + " ", colors.get("bullet")));
-                });
-            }
             visitChildren(listBlock);
-
             html().text("\n");
-
-            if (ctxtStack.size() > 0) {
-                ctxtStack.peek().withType(OrderedList.class, (ctx, node) -> {
-                    ctx.setPrefix(null);
-                });
-
-                ctxtStack.peek().withType(BulletList.class, (ctx, node) -> {
-                    ctx.setPrefix(null);
-                });
-            }
         }
 
         @Override
         public void visit(final ListItem listItem) {
-            if (ctxtStack.size() > 0) {
-                if (ctxtStack.peek().getPrefix() != null) {
-                    html().text(ctxtStack.peek().prefix);
-                }
-            }
             visitChildren(listItem);
             html().line();
         }
@@ -163,10 +164,16 @@ public class Main
             for (int i = 0; i < heading.getLevel(); i++) {
                 h.append("#");
             }
-            html().text(Ansi.colorize(h.toString(), colors.get("header")));
-            html().text(" ");
+            Ctx ctx = new Ctx(heading);
+
+            ctx.textColor = colors.get("header");
+            ctx.prefix = h.toString() + " ";
+            ctxtStack.push(ctx);
+
             visitChildren(heading);
+
             html().text("\n\n");
+            ctxtStack.pop();
         }
 
         @Override
@@ -192,9 +199,13 @@ public class Main
 
         @Override
         public void visit(final Emphasis emphasis) {
-            beginDelimited(emphasis, colors.get("emphasis"));
+            Ctx ctx = new Ctx(emphasis);
+            ctx.textColor = colors.get("emphasis");
+            ctxtStack.push(ctx);
+            emitColorized(colors.get("emphasis"), emphasis.getOpeningDelimiter());
             visitChildren(emphasis);
-            endDelimited(emphasis);
+            emitColorized(colors.get("emphasis"), emphasis.getClosingDelimiter());
+            ctxtStack.pop();
         }
 
 
@@ -203,26 +214,26 @@ public class Main
             html().text(Ansi.reset);
         }
 
-        private void beginDelimited(final Delimited emphasis, final String color) {
+        private void emitColorized(final String color, final String text) {
             html().text(Ansi.beginColor(color));
-            html().text(emphasis.getOpeningDelimiter());
+            html().text(text);
+            html().text(Ansi.reset);
         }
 
         @Override
         public void visit(final StrongEmphasis strongEmphasis) {
-            beginDelimited(strongEmphasis, colors.get("strong"));
+            Ctx ctx = new Ctx(strongEmphasis);
+            ctx.textColor = colors.get("strong");
+            ctxtStack.push(ctx);
+            emitColorized(colors.get("strong"), strongEmphasis.getOpeningDelimiter());
             visitChildren(strongEmphasis);
-            endDelimited(strongEmphasis);
+            emitColorized(colors.get("strong"), strongEmphasis.getClosingDelimiter());
+            ctxtStack.pop();
         }
 
         @Override
         public void visit(final Link link) {
             String url = context.encodeUrl(link.getDestination());
-
-            if (link.getTitle() != null) {
-                //    attrs.put("title", link.getTitle());
-            }
-//            html.tag("a", getAttrs(link, "a", attrs));
             html().text("[");
             visitChildren(link);
             html().text("](");
@@ -235,7 +246,75 @@ public class Main
                 html().raw(Ansi.reset);
             }
             html().text(")");
-//            html.tag("/a");
+        }
+
+        @Override
+        public void visit(final BlockQuote blockQuote) {
+            Ctx ctx = new Ctx(blockQuote);
+            ctxtStack.push(ctx);
+            ctx.setTextColor(colors.get("blockquote"));
+            ctx.setPrefix("> ");
+            visitChildren(blockQuote);
+
+            ctxtStack.pop();
+        }
+
+        @Override
+        public void visit(final IndentedCodeBlock indentedCodeBlock) {
+            emitColorized(colors.get("code"), indent("    ", indentedCodeBlock));
+        }
+
+        private String indent(String indent, final IndentedCodeBlock indentedCodeBlock) {
+
+            String[] split = indentedCodeBlock.getLiteral().split("[\r\n]");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < split.length; i++) {
+                String s = split[i];
+                sb.append(indent);
+                sb.append(s);
+                sb.append("\n");
+            }
+            return sb.toString();
+        }
+
+        @Override
+        public void visit(final FencedCodeBlock fencedCodeBlock) {
+            html().text(Ansi.beginColor(colors.get("code")));
+            StringBuilder fence = new StringBuilder();
+            for (int i = 0; i < fencedCodeBlock.getFenceLength(); i++) {
+                fence.append(fencedCodeBlock.getFenceChar());
+            }
+            html().text(fence.toString());
+            html().line();
+            html().text(fencedCodeBlock.getLiteral());
+            html().line();
+            html().text(fence.toString());
+            html().text(Ansi.reset);
+        }
+
+        @Override
+        public void visit(final Text text) {
+            String
+                    textcolor =
+                    ctxtStack.size() > 0 && ctxtStack.peek().textColor != null
+                    ? ctxtStack.peek().textColor
+                    : colors.get("text");
+
+            html().text(Ansi.beginColor(textcolor));
+
+            if (ctxtStack.size() > 0) {
+                ctxtStack.peek().withType(Node.class, (ctx, node) -> {
+                    if (null != ctx.prefix) {
+                        html().raw(ctx.prefix);
+                    }
+                });
+            }
+
+            super.visit(text);
+
+            if (textcolor != null) {
+                html().text(Ansi.reset);
+            }
         }
 
         private HtmlWriter html() {
@@ -246,6 +325,7 @@ public class Main
         private class Ctx {
             final Node node;
             String prefix;
+            String textColor;
 
             public Ctx(final Node node) {
                 this.node = node;
@@ -275,53 +355,130 @@ public class Main
 
     static class Ansi {
         static String esc = "\u001B";
+        static String escStart = esc + "[";
+        static final int FG = 38;
+        static final int BG = 48;
         static String reset = esc + "[0m";
+        static String modeBold = "bold-";
+        static String modeBg = "bg-";
 
         static int rgb(int r, int g, int b) {
             return 16 + b + 6 * g + 36 * r;
         }
 
-        static String ergb(int r, int g, int b) {
-            return esc + "[38;5;" + rgb(5, 2, 0) + "m";
+        static String fgrgb(int r, int g, int b) {
+            return esc(FG, 5, rgb(r, g, b));
         }
 
-        static String fg(int val) {
-            return esc + "[" + val + "m";
+        static String bgrgb(int r, int g, int b) {
+            return esc(BG, 5, rgb(r, g, b));
+        }
+
+        static String basic(int val) {
+            return escStart + val + "m";
+        }
+
+        static String esc(int... val) {
+            StringBuilder sb = new StringBuilder();
+            for (int i : val) {
+                if (sb.length() > 0) {
+                    sb.append(";");
+                }
+                sb.append(Integer.toString(i));
+            }
+            return escStart + sb.toString() + "m";
         }
 
         static Map<String, String> cols = new HashMap<>();
 
         static {
-            cols.put("red", fg(31));
-            cols.put("orange", ergb(5, 2, 0));
-            cols.put("indigo", ergb(2, 0, 2));
-            cols.put("violet", ergb(4, 0, 5));
-            cols.put("green", fg(32));
-            cols.put("yellow", fg(33));
-            cols.put("blue", fg(34));
-            cols.put("magenta", fg(35));
-            cols.put("cyan", fg(36));
-            cols.put("white", fg(37));
+            cols.put("black", basic(30));
+            cols.put("bg-black", basic(40));
+            cols.put("brightblack", basic(90));
+            cols.put("bg-brightblack", basic(100));
+            cols.put("red", basic(31));
+            cols.put("bg-red", basic(41));
+            cols.put("brightred", basic(91));
+            cols.put("bg-brightred", basic(101));
+            cols.put("orange", fgrgb(5, 2, 0));
+            cols.put("bg-orange", bgrgb(5, 2, 0));
+            cols.put("indigo", fgrgb(2, 0, 2));
+            cols.put("bg-indigo", bgrgb(2, 0, 2));
+            cols.put("violet", fgrgb(4, 0, 5));
+            cols.put("bg-violet", bgrgb(4, 0, 5));
+            cols.put("green", basic(32));
+            cols.put("bg-green", basic(42));
+            cols.put("brightgreen", basic(92));
+            cols.put("bg-brightgreen", basic(102));
+            cols.put("yellow", basic(33));
+            cols.put("bg-yellow", basic(43));
+            cols.put("brightyellow", basic(93));
+            cols.put("bg-brightyellow", basic(103));
+            cols.put("blue", basic(34));
+            cols.put("bg-blue", basic(44));
+            cols.put("brightblue", basic(94));
+            cols.put("bg-brightblue", basic(104));
+            cols.put("magenta", basic(35));
+            cols.put("bg-magenta", basic(45));
+            cols.put("brightmagenta", basic(95));
+            cols.put("bg-brightmagenta", basic(105));
+            cols.put("cyan", basic(36));
+            cols.put("bg-cyan", basic(46));
+            cols.put("brightcyan", basic(96));
+            cols.put("bg-brightcyan", basic(106));
+            cols.put("white", basic(37));
+            cols.put("bg-white", basic(47));
+            cols.put("brightwhite", basic(97));
+            cols.put("bg-brightwhite", basic(107));
+
+            cols.put("gray", fgrgb(1, 1, 1));
+            cols.put("bg-gray", bgrgb(1, 1, 1));
         }
 
 
         static String colorize(String text, String color) {
             StringBuilder sb = new StringBuilder();
-            if (null == cols.get(color)) {
+            if (null == getColor(color)) {
                 return text;
             }
-            sb.append(cols.get(color));
+            sb.append(getColor(color));
 
             sb.append(text);
             sb.append(reset);
             return sb.toString();
         }
 
+        private static String getColor(final String color) {
+            String val = cols.get(color);
+            if (val != null) {
+                return val;
+            }
+            //256 color
+            Pattern compile = Pattern.compile("(?<bg>bg-)?(?<r>\\d{1,2}),(?<g>\\d{1,2}),(?<b>\\d{1,2})");
+            Matcher matcher = compile.matcher(color);
+            if (matcher.matches()) {
+                if (matcher.group("bg") != null) {
+                    return bgrgb(
+                            Integer.parseInt(matcher.group("r")),
+                            Integer.parseInt(matcher.group("g")),
+                            Integer.parseInt(matcher.group("b"))
+                    );
+                }
+                return fgrgb(
+                        Integer.parseInt(matcher.group("r")),
+                        Integer.parseInt(matcher.group("g")),
+                        Integer.parseInt(matcher.group("b"))
+                );
+
+            }
+            return null;
+        }
+
         static String beginColor(String color) {
-            if (null == cols.get(color)) {
+            if (null == getColor(color)) {
                 return "";
             }
-            return cols.get(color);
+            return getColor(color);
         }
     }
 }
