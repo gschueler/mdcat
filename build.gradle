@@ -8,10 +8,14 @@ plugins{
     id 'com.gradle.build-scan' version '1.13'
     id 'application'
     id 'net.ltgt.apt' version '0.10'
+    id 'com.github.johnrengelman.shadow' version '4.0.0'
+    id 'idea'
 }
-apply plugin: 'idea'
+
 mainClassName = 'us.vario.greg.md.Main'
 applicationName = 'md'
+archivesBaseName = 'md'
+
 scmVersion {
     tag {
     	//defines release tags like "v1.2.3"
