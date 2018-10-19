@@ -475,7 +475,7 @@ public class Main
                 });
             }
 
-            super.visit(text);
+            html().raw(text.getLiteral());
             lastLine = text.getLiteral().charAt(text.getLiteral().length() - 1) == '\n';
 
             if (textcolor != null) {
