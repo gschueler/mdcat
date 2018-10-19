@@ -16,6 +16,10 @@ TODO:
 - [ ] add a LICENSE file if public
 - [ ] commit to git!
 
+1. avoid
+2. evade
+3. evoid
+
 Another Project
 ---------------
 
