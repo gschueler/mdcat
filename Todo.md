@@ -5,3 +5,4 @@
 * [x] support "plain" output without markdown syntax (default)
 * [ ] support input via stdin
 * [x] don't emit html escaped text
+* [ ] don't emit html escaped text in code blocks
