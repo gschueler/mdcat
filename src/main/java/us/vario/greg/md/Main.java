@@ -476,7 +476,9 @@ public class Main
             }
 
             html().raw(text.getLiteral());
-            lastLine = text.getLiteral().charAt(text.getLiteral().length() - 1) == '\n';
+            if(text.getLiteral().length()>0) {
+                lastLine = text.getLiteral().charAt(text.getLiteral().length() - 1) == '\n';
+            }
 
             if (textcolor != null) {
                 html().text(Ansi.reset);
