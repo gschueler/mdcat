@@ -141,7 +141,7 @@ public class Main
     }
 
     @RequiredArgsConstructor
-    private class MyCoreNodeRendererFactory
+    private static class MyCoreNodeRendererFactory
             implements HtmlNodeRendererFactory
     {
         final Map<String, String> colors;
@@ -154,7 +154,7 @@ public class Main
         }
     }
 
-    private class MyCoreNodeRenderer
+    private static class MyCoreNodeRenderer
             extends CoreHtmlNodeRenderer
     {
         final Map<String, String> colors;
@@ -268,7 +268,7 @@ public class Main
             if (!plain) {
                 html().text("`");
             }
-            html().text(code.getLiteral());
+            html().raw(code.getLiteral());
             if (!plain) {
                 html().text("`");
             }
@@ -297,8 +297,16 @@ public class Main
         }
 
         private void emitColorized(final String color, final String text) {
+            emitColorized(color, text, false);
+        }
+
+        private void emitColorized(final String color, final String text, boolean raw) {
             html().text(Ansi.beginColor(color));
-            html().text(text);
+            if (raw) {
+                html().raw(text);
+            } else {
+                html().text(text);
+            }
             html().text(Ansi.reset);
         }
 
@@ -397,9 +405,9 @@ public class Main
         @Override
         public void visit(final IndentedCodeBlock indentedCodeBlock) {
             if (!plain) {
-                emitColorized(getColor("code"), indent("    ", indentedCodeBlock));
+                emitColorized(getColor("code"), indent("    ", indentedCodeBlock), true);
             } else {
-                emitColorized(getColor("code"), indentedCodeBlock.getLiteral());
+                emitColorized(getColor("code"), indentedCodeBlock.getLiteral(), true);
             }
         }
 
@@ -427,7 +435,7 @@ public class Main
                 html().text(fence.toString());
                 line();
             }
-            html().text(fencedCodeBlock.getLiteral());
+            html().raw(fencedCodeBlock.getLiteral());
             line();
             if (!plain) {
                 html().text(fence.toString());
