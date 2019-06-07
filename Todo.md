@@ -6,3 +6,4 @@
 * [ ] support input via stdin
 * [x] don't emit html escaped text
 * [x] don't emit html escaped text in code blocks `like "this" && this or < this even > `
+* [ ] support github checkbox lists?
