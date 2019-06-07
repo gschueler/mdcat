@@ -11,6 +11,4 @@ Cat markdown files with ansi colorization for improved readability on the comman
 
 ## TODO
 
-- [ ] move `travis-template.yaml` to `.travis.yaml`, update contents
-- [ ] to enable travis releases, run `travis setup releases` to setup deployment
-- [ ] add a LICENSE file if public
+- [ ] html entity issues
