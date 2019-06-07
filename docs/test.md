@@ -27,6 +27,7 @@ Another Project
 * i'm *excelling* at this
 * otherwise I _differ_
 * and [Always](http://google.com "pillow") **creative**
+* code `inline` and `with "special" && escaped < characters > see`
 
 > quote
 > text is always
