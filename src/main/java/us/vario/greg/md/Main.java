@@ -66,11 +66,6 @@ public class Main
             if (null == profile && System.getenv("MD_PROFILE") != null) {
                 profile = System.getenv("MD_PROFILE").toLowerCase();
             }
-            System.getenv().forEach((s, s2) -> {
-                if (s.startsWith("MD_OPT_")) {
-                    options.put(s.substring(7), s2);
-                }
-            });
 
             if (null == profile) {
                 profile = DEFAULT_PROFILE;
@@ -78,15 +73,15 @@ public class Main
             if (null != profile) {
                 colors.putAll(loadProfile(profile));
             }
-            //eval env colors
-            for (String envKey : System.getenv().keySet()) {
-
-                if (envKey.startsWith("COL_")) {
-                    String colName = envKey.substring("COL_".length()).toLowerCase();
-                    colors.put(colName, System.getenv(envKey));
+            System.getenv().forEach((s, s2) -> {
+                if (s.startsWith("MD_OPT_")) {
+                    options.put(s.substring(7), s2);
                 }
-
-            }
+                if (s.startsWith("MD_COL_")) {
+                    String colName = s.substring("MD_COL_".length()).toLowerCase();
+                    colors.put(colName, s2);
+                }
+            });
             HtmlRenderer renderer = HtmlRenderer.builder().
                     nodeRendererFactory(new MyCoreNodeRendererFactory(colors, options, isPlain())).build();
             renderer.render(document, System.out);
@@ -149,6 +144,8 @@ public class Main
         map.put("blockquote", "gray");
         map.put("imagetext", "brightblue");
         map.put("linktext", "brightblue");
+        map.put("checked", "brightgreen");
+        map.put("unchecked", "orange");
 
         DEFAULT_COLORS = Collections.unmodifiableMap(map);
 
@@ -225,6 +222,14 @@ public class Main
                         return options.getOrDefault("CHECKED_ITEM", DEFAULT_CHECKED_ITEM) + " ";
                     }
                     return "• ";
+                });
+                ctx.setPrefixerColor((text) -> {
+                    if (text.startsWith(UNCHECKED_ITEM_TEXT)) {
+                        return getColor("unchecked");
+                    } else if (text.startsWith(CHECKED_ITEM_TEXT)) {
+                        return getColor("checked");
+                    }
+                    return null;
                 });
                 ctx.setTransform((text) -> {
                     if (text.startsWith(UNCHECKED_ITEM_TEXT) || text.startsWith(CHECKED_ITEM_TEXT)) {
@@ -505,22 +510,34 @@ public class Main
                     ? ctxtStack.peek().textColor
                     : getColor("text");
 
-            if (textcolor != null) {
-                html().text(Ansi.beginColor(textcolor));
-            }
 
             String literal = text.getLiteral();
             if (ctxtStack.size() > 0) {
                 ctxtStack.peek().withType(Node.class, (ctx, node) -> {
                     String prefix = ctx.getPrefix(literal);
-                    if (null != prefix) {
-                        if(lastLine) {
-                            html().raw(prefix);
+                    String prefixColor = ctx.getPrefixColor(literal);
+
+                    if (null != prefix && lastLine) {
+                        if (prefixColor != null) {
+                            html().text(Ansi.beginColor(prefixColor));
                         }
+                        html().raw(prefix);
+
+                        if (prefixColor != null) {
+                            html().text(Ansi.reset);
+                        }
+                    }
+
+                    if (textcolor != null) {
+                        html().text(Ansi.beginColor(textcolor));
                     }
                     html().raw(ctx.transform(literal));
                 });
             } else {
+
+                if (textcolor != null) {
+                    html().text(Ansi.beginColor(textcolor));
+                }
                 html().raw(literal);
             }
             if (text.getLiteral().length() > 0) {
@@ -543,6 +560,7 @@ public class Main
             Function<String, String> prefixer;
             Function<String, String> transform;
             String textColor;
+            Function<String, String> prefixerColor;
 
             public Ctx(final Node node) {
                 this.node = node;
@@ -575,6 +593,13 @@ public class Main
                 }
                 if (null != prefixer) {
                     return prefixer.apply(text);
+                }
+                return null;
+            }
+
+            String getPrefixColor(String text) {
+                if (null != prefixerColor) {
+                    return prefixerColor.apply(text);
                 }
                 return null;
             }
