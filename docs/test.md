@@ -9,10 +9,10 @@ Linked image: [![Travis CI](https://travis-ci.org/rundeck/rundeck.svg?branch=mas
 
 TODO:
 
-- [ ] update gradle.properties: set group name
-- [ ] move `travis-template.yaml` to `.travis.yaml`, update contents
-- [ ] to enable travis releases, run `travis setup releases` to setup deployment
-- [ ] update readme
+- [x] update gradle.properties: set group name
+- [x] move `travis-template.yaml` to `.travis.yaml`, update contents
+- [x] to enable travis releases, run `travis setup releases` to setup deployment
+- [x] update readme
 - [ ] add a "LICENSE" file if public
 - [ ] commit to git!
 

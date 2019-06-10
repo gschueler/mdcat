@@ -12,6 +12,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,10 +61,17 @@ public class Main
                 renderer.render(document, System.out);
                 return null;
             }
+            Map<String, String> options = new HashMap<>();
             Map<String, String> colors = new HashMap<>(DEFAULT_COLORS);
             if (null == profile && System.getenv("MD_PROFILE") != null) {
                 profile = System.getenv("MD_PROFILE").toLowerCase();
             }
+            System.getenv().forEach((s, s2) -> {
+                if (s.startsWith("MD_OPT_")) {
+                    options.put(s.substring(7), s2);
+                }
+            });
+
             if (null == profile) {
                 profile = DEFAULT_PROFILE;
             }
@@ -80,7 +88,7 @@ public class Main
 
             }
             HtmlRenderer renderer = HtmlRenderer.builder().
-                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors, isPlain())).build();
+                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors, options, isPlain())).build();
             renderer.render(document, System.out);
 
         }
@@ -122,6 +130,11 @@ public class Main
     }
 
     static Map<String, String> DEFAULT_COLORS;
+    static Map<String, String> DEFAULT_OPTS;
+
+    public static final String DEFAULT_UNCHECKED_ITEM = "☐";
+
+    public static final String DEFAULT_CHECKED_ITEM = "✓"; //☒ ✗
 
     static {
         HashMap<String, String> map = new HashMap<>();
@@ -138,6 +151,11 @@ public class Main
         map.put("linktext", "brightblue");
 
         DEFAULT_COLORS = Collections.unmodifiableMap(map);
+
+        HashMap<String, String> map2 = new HashMap<>();
+        map2.put("UNCHECKED_ITEM", DEFAULT_UNCHECKED_ITEM);
+        map2.put("CHECKED_ITEM", DEFAULT_CHECKED_ITEM);
+        DEFAULT_OPTS = Collections.unmodifiableMap(map2);
     }
 
     @RequiredArgsConstructor
@@ -145,29 +163,35 @@ public class Main
             implements HtmlNodeRendererFactory
     {
         final Map<String, String> colors;
+        final Map<String, String> options;
         final boolean plain;
 
 
         @Override
         public NodeRenderer create(final HtmlNodeRendererContext context) {
-            return new MyCoreNodeRenderer(context, colors, plain);
+            return new MyCoreNodeRenderer(context, colors, options, plain);
         }
     }
 
     private static class MyCoreNodeRenderer
             extends CoreHtmlNodeRenderer
     {
+        public static final String UNCHECKED_ITEM_TEXT = "[ ] ";
+        public static final String CHECKED_ITEM_TEXT = "[x] ";
         final Map<String, String> colors;
+        final Map<String, String> options;
         final boolean plain;
 
         public MyCoreNodeRenderer(
                 final HtmlNodeRendererContext context,
                 final Map<String, String> colors,
+                final Map<String, String> options,
                 boolean plain
         )
         {
             super(context);
             this.colors = colors;
+            this.options = options;
             this.plain = plain;
         }
 
@@ -183,7 +207,7 @@ public class Main
         public void visit(final OrderedList orderedList) {
             Ctx ctx = new Ctx(orderedList, orderedList.getStartNumber());
             ctx.textColor = getColor("bullet");
-            ctx.setPrefixer(() -> ctx.nextListItemIndex() + ". ");
+            ctx.setPrefixer((text) -> ctx.nextListItemIndex() + ". ");
             ctxtStack.push(ctx);
             renderListBlock(orderedList);
             ctxtStack.pop();
@@ -194,7 +218,20 @@ public class Main
             Ctx ctx = new Ctx(bulletList);
             ctx.textColor = getColor("bullet");
             if (plain) {
-                ctx.setPrefix("• ");
+                ctx.setPrefixer((text) -> {
+                    if (text.startsWith(UNCHECKED_ITEM_TEXT)) {
+                        return options.getOrDefault("UNCHECKED_ITEM", DEFAULT_UNCHECKED_ITEM) + " ";
+                    } else if (text.startsWith(CHECKED_ITEM_TEXT)) {
+                        return options.getOrDefault("CHECKED_ITEM", DEFAULT_CHECKED_ITEM) + " ";
+                    }
+                    return "• ";
+                });
+                ctx.setTransform((text) -> {
+                    if (text.startsWith(UNCHECKED_ITEM_TEXT) || text.startsWith(CHECKED_ITEM_TEXT)) {
+                        return text.substring(4);
+                    }
+                    return text;
+                });
             } else {
                 ctx.setPrefix(bulletList.getBulletMarker() + " ");
             }
@@ -472,19 +509,21 @@ public class Main
                 html().text(Ansi.beginColor(textcolor));
             }
 
+            String literal = text.getLiteral();
             if (ctxtStack.size() > 0) {
                 ctxtStack.peek().withType(Node.class, (ctx, node) -> {
-                    String prefix = ctx.getPrefix();
+                    String prefix = ctx.getPrefix(literal);
                     if (null != prefix) {
                         if(lastLine) {
                             html().raw(prefix);
                         }
                     }
+                    html().raw(ctx.transform(literal));
                 });
+            } else {
+                html().raw(literal);
             }
-
-            html().raw(text.getLiteral());
-            if(text.getLiteral().length()>0) {
+            if (text.getLiteral().length() > 0) {
                 lastLine = text.getLiteral().charAt(text.getLiteral().length() - 1) == '\n';
             }
 
@@ -501,7 +540,8 @@ public class Main
         private class Ctx {
             final Node node;
             String prefix;
-            Supplier<String> prefixer;
+            Function<String, String> prefixer;
+            Function<String, String> transform;
             String textColor;
 
             public Ctx(final Node node) {
@@ -522,12 +562,19 @@ public class Main
                 return olIndex++;
             }
 
-            String getPrefix() {
+            String transform(String text) {
+                if (null != transform) {
+                    return transform.apply(text);
+                }
+                return text;
+            }
+
+            String getPrefix(String text) {
                 if (null != prefix) {
                     return prefix;
                 }
                 if (null != prefixer) {
-                    return prefixer.get();
+                    return prefixer.apply(text);
                 }
                 return null;
             }
