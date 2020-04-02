@@ -2,6 +2,7 @@ package us.vario.greg.md;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.commonmark.ext.autolink.AutolinkExtension;
 import org.commonmark.node.*;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.NodeRenderer;
@@ -99,7 +100,7 @@ public class Main
                                 + readmePattern
                                 + ")");
         }
-        Parser parser = Parser.builder().build();
+        Parser parser = getParser();
         try (FileInputStream is = new FileInputStream(file)) {
 
             Node document = parser.parseReader(new InputStreamReader(is));
@@ -132,6 +133,12 @@ public class Main
 
         }
         return 0;
+    }
+
+    private Parser getParser() {
+        return Parser.builder()
+                     .extensions(Collections.singletonList(AutolinkExtension.create()))
+                     .build();
     }
 
     private Map<? extends String, ? extends String> loadProfile(final String profile) {
@@ -534,6 +541,11 @@ public class Main
         public void visit(final HardLineBreak hardLineBreak) {
             html().raw(context.getSoftbreak());
             lastLine=true;
+        }
+
+        @Override
+        public void visit(final ThematicBreak thematicBreak) {
+            html().raw("---");
         }
 
         @Override

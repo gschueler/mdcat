@@ -35,9 +35,9 @@ configurations{
 
 dependencies {
     // Use the latest Groovy version for building this library
-    // compile "com.squareup.okhttp3:okhttp:3.6.0"
-    compile 'com.atlassian.commonmark:commonmark:0.11.0'
-    compile 'com.atlassian.commonmark:commonmark-ext-gfm-tables:0.11.0'
+
+    compile 'com.atlassian.commonmark:commonmark:0.14.0'
+    compile 'com.atlassian.commonmark:commonmark-ext-autolink:0.14.0'
     compile 'info.picocli:picocli:4.2.0'
 
     provided 'org.projectlombok:lombok:1.18.2'

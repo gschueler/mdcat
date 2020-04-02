@@ -8,3 +8,9 @@
 * [x] don't emit html escaped text in code blocks `like "this" && this or < this even > `
 * [x] support github checkbox lists
 * [ ] support definition lists
+* [x] support autolink https://github.com/gschueler/mdcat
+* [x] support hr tag:
+
+---
+
+
