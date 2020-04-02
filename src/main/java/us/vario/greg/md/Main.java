@@ -13,45 +13,92 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@CommandLine.Command(description = "Ansi colorized text rendering of Markdown files",
+@CommandLine.Command(description = "Ansi colorized text rendering of Markdown files. Will automatically find and "
+                                   + "render a README file in the current working directory.",
                      name = "md", mixinStandardHelpOptions = true, version = "0.1")
 public class Main
-        implements Callable<Void>
+        implements Callable<Integer>
 {
 
     public static final String DEFAULT_PROFILE = "light";
-    @CommandLine.Parameters(index = "0", description = "The file to read.", paramLabel = "FILE")
+    @CommandLine.Parameters(index = "0",
+                            description = "The file to read. If unspecified, a README file in local directory will be"
+                                          + " read.",
+                            paramLabel = "FILE",
+                            arity = "0..1")
     private File file;
 
     @CommandLine.Option(names = {"-H", "--html"}, description = "render as html")
     private boolean html;
 
-    @CommandLine.Option(names = {"-p", "--plain"},
-                        description = "render colorized text without markdown syntax (default)")
-    private boolean plain;
-
     @CommandLine.Option(names = {"-m", "--markdown", "--md"},
-                        description = "render colorized text *with* markdown syntax (inverts --plain), can be set "
-                                      + "with env var MD_MD")
+                        description = "render colorized text *with* markdown syntax, can be set "
+                                      + "with env var MD_MD",
+                        defaultValue = "${env:MD_MD:-false}")
     private boolean markdown;
 
     @CommandLine.Option(names = {"-P", "--profile"},
                         description = "Use a prefdefined color profile: [light,dark], can be set with env var "
-                                      + "MD_PROFILE")
+                                      + "MD_PROFILE",
+                        defaultValue = "${env:MD_PROFILE}")
     private String profile;
 
+    @CommandLine.Option(names = {"-n", "--no-readme"},
+                        description = "Disable automatic README discovery.")
+    private boolean noreadme;
+
+    @CommandLine.Option(names = {"-r", "--readme-pattern"},
+                        description = "Readme file regex to search, can also be set with MD_README",
+                        defaultValue = "${env:MD_README:-(?i)readme(\\.(te?xt|md|markdown))?}"
+    )
+    private Pattern readmePattern = Pattern.compile("(?i)readme(\\.(te?xt|md|markdown))?");
+
     public static void main(String[] args) {
-        CommandLine.call(new Main(), args);
+        new CommandLine(new Main()).setExecutionExceptionHandler(new ShortErrorMessageHandler()).execute(args);
     }
 
+    static class ShortErrorMessageHandler
+            implements CommandLine.IExecutionExceptionHandler
+    {
+
+        public int handleExecutionException(Exception ex, CommandLine cmd, CommandLine.ParseResult parseResult)
+                throws Exception
+        {
+            PrintWriter writer = cmd.getErr();
+
+            writer.println(ex.getMessage());
+
+            writer.print(cmd.getHelp().fullSynopsis()); // since 4.1
+
+            CommandLine.Model.CommandSpec spec = cmd.getCommandSpec();
+            writer.printf("Try '%s --help' for more information.%n", spec.qualifiedName());
+
+            return cmd.getExitCodeExceptionMapper() != null
+                   ? cmd.getExitCodeExceptionMapper().getExitCode(ex)
+                   : spec.exitCodeOnInvalidInput();
+        }
+    }
 
     @Override
-    public Void call() throws Exception {
+    public Integer call() throws Exception {
 
+        if (file == null && !noreadme) {
+            //look for readme file
+            Optional<File> first = Arrays.stream(
+                    Objects.requireNonNull(
+                            new File(".")
+                                    .listFiles((dir, name) -> readmePattern.matcher(name).matches())
+                    )).findFirst();
+            first.ifPresent((val) -> file = val);
+        }
+        if (file == null) {
+            throw new Exception("No README file was located. Please specify a file. (Readme pattern: "
+                                + readmePattern
+                                + ")");
+        }
         Parser parser = Parser.builder().build();
         try (FileInputStream is = new FileInputStream(file)) {
 
@@ -63,9 +110,6 @@ public class Main
             }
             Map<String, String> options = new HashMap<>();
             Map<String, String> colors = new HashMap<>(DEFAULT_COLORS);
-            if (null == profile && System.getenv("MD_PROFILE") != null) {
-                profile = System.getenv("MD_PROFILE").toLowerCase();
-            }
 
             if (null == profile) {
                 profile = DEFAULT_PROFILE;
@@ -83,21 +127,11 @@ public class Main
                 }
             });
             HtmlRenderer renderer = HtmlRenderer.builder().
-                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors, options, isPlain())).build();
+                    nodeRendererFactory(new MyCoreNodeRendererFactory(colors, options, !markdown)).build();
             renderer.render(document, System.out);
 
         }
-        return null;
-    }
-
-    private boolean isPlain() {
-        if (markdown) {
-            return false;
-        }
-        if (plain) {
-            return true;
-        }
-        return System.getenv("MD_MD") == null;
+        return 0;
     }
 
     private Map<? extends String, ? extends String> loadProfile(final String profile) {
