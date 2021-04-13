@@ -14,3 +14,12 @@
 ---
 
 
+weird behavior of bullets:
+
+# contents
+
+* `somethign` - blah blah
+* `somethign` - blah blah
+* `somethign` - blah blah
+* `somethign` - blah blah
+
